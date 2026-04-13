@@ -6,6 +6,10 @@ import com.example.demo.entity.ZDoc;
 import com.example.demo.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 @Service
@@ -25,30 +29,79 @@ public class FormaService {
     }
 
     public Optional<FormaDTO> getByIin(Long iin) {
-        return egRepo.findByIin(iin).flatMap(eg -> {
+        return egRepo.findFirstByIin(iin).flatMap(eg -> {
             if (eg.getZnum() == null) return Optional.empty();
             return zDocRepo.findByNum(eg.getZnum())
                     .map(zd -> buildDto(eg, zd));
         });
     }
 
-    // ── НОВЫЙ МЕТОД ──────────────────────────────────────────────
+    public List<FormaDTO> getAllByIin(Long iin) {
+        List<MEg> egList = egRepo.findAllByIin(iin);
+        List<FormaDTO> result = new ArrayList<>();
+        for (MEg eg : egList) {
+            if (eg.getZnum() == null) continue;
+            zDocRepo.findByNum(eg.getZnum()).ifPresent(zd ->
+                    result.add(buildDto(eg, zd))
+            );
+        }
+        return result;
+    }
+
+    public Optional<FormaDTO> getClientByIin(Long iin) {
+        return egRepo.findFirstByIin(iin).map(eg -> {
+            FormaDTO dto = new FormaDTO();
+            dto.setIin(eg.getIin());
+            String fio = (eg.getLn() != null ? eg.getLn() : "") + " "
+                    + (eg.getFn() != null ? eg.getFn() : "")
+                    + (eg.getMn() != null ? " " + eg.getMn() : "");
+            dto.setFio(fio.trim());
+            dto.setDateBirth(eg.getBd());
+            dto.setBrid(eg.getBrid());
+            dto.setMobTel(eg.getMobilePhone());
+            return dto;
+        });
+    }
+
+    public FormaDTO create(FormaDTO dto) {
+        long newId = (System.currentTimeMillis() % 1_000_000_000L) + 100_000_000L;
+
+        ZDoc zd = new ZDoc();
+        zd.setId(newId);
+        zd.setNum(dto.getNomerZayavleniya());
+        zd.setBrid(dto.getBrid() != null ? dto.getBrid().substring(0, Math.min(dto.getBrid().length(), 4)) : null);
+        zd.setDInp(dto.getDateObr());
+        zd.setDInpDoc(dto.getDatePrivem());
+        zd.setDReg(LocalDate.now());
+        zd.setIdSour(null);
+        zd.setIdTip("NEW");
+        zd.setDoclang("ru");
+        zd.setHomePhone(dto.getDomTel());
+        zd.setMobilePhone(dto.getMobTel());
+
+        zDocRepo.save(zd);
+
+        MEg eg = dto.getIin() != null
+                ? egRepo.findFirstByIin(dto.getIin()).orElse(null)
+                : null;
+
+        return buildDto(eg, zd);
+    }
+
     public Optional<FormaDTO> update(Long id, FormaDTO dto) {
         return zDocRepo.findById(id).map(zd -> {
 
-            if (dto.getDateObr() != null)        zd.setDInp(dto.getDateObr());
-            if (dto.getDatePrivem() != null)      zd.setDInpDoc(dto.getDatePrivem());
-            if (dto.getYazykZayavl() != null)     zd.setDoclang(dto.getYazykZayavl());
-            if (dto.getDomTel() != null)          zd.setHomePhone(dto.getDomTel());
-            if (dto.getMobTel() != null)          zd.setMobilePhone(dto.getMobTel());
-            if (dto.getIstochnik() != null)       zd.setIdSour(dto.getIstochnik());
-            if (dto.getVidZayavleniya() != null)  zd.setIdTip(dto.getVidZayavleniya());
+            if (dto.getDateObr() != null)    zd.setDInp(dto.getDateObr());
+            if (dto.getDatePrivem() != null) zd.setDInpDoc(dto.getDatePrivem());
+            if (dto.getYazykZayavl() != null) zd.setDoclang("ru");
+            if (dto.getDomTel() != null)     zd.setHomePhone(dto.getDomTel());
+            if (dto.getMobTel() != null)     zd.setMobilePhone(dto.getMobTel());
 
             zDocRepo.save(zd);
 
             MEg eg = null;
             if (dto.getIin() != null) {
-                Optional<MEg> egOpt = egRepo.findByIin(dto.getIin());
+                Optional<MEg> egOpt = egRepo.findFirstByIin(dto.getIin());
                 if (egOpt.isPresent()) {
                     MEg egEntity = egOpt.get();
                     if (dto.getMobTel() != null) egEntity.setMobilePhone(dto.getMobTel());
@@ -60,7 +113,6 @@ public class FormaService {
             return buildDto(eg, zd);
         });
     }
-    // ─────────────────────────────────────────────────────────────
 
     private FormaDTO buildDto(MEg eg, ZDoc zd) {
         FormaDTO dto = new FormaDTO();

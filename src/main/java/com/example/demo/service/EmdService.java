@@ -16,7 +16,13 @@ public class EmdService {
     @Autowired private ZDocRepository zDocRepo;
 
     public List<EmdDTO> getAll() {
-        return egRepo.findAll().stream().map(eg -> {
+        return egRepo.findAll().stream()
+                .sorted((a, b) -> {
+                    if (a.getDat() == null) return 1;
+                    if (b.getDat() == null) return -1;
+                    return b.getDat().compareTo(a.getDat());
+                })
+                .map(eg -> {
             EmdDTO dto = new EmdDTO();
             dto.setId(eg.getId());
             dto.setDateObr(eg.getDat());

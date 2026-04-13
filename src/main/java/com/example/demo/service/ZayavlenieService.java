@@ -16,7 +16,13 @@ public class ZayavlenieService {
     @Autowired private ZDocRepository zDocRepo;
 
     public List<ZayavlenieDTO> getAll() {
-        return egRepo.findAll().stream().map(eg -> {
+        return egRepo.findAll().stream()
+                .sorted((a, b) -> {
+                    if (a.getDReg() == null) return 1;
+                    if (b.getDReg() == null) return -1;
+                    return b.getDReg().compareTo(a.getDReg());
+                })
+                .map(eg -> {
             ZayavlenieDTO dto = new ZayavlenieDTO();
             dto.setId(eg.getId());
             dto.setIin(eg.getIin());
