@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.Data;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "m_sol", schema = "em5")
@@ -16,7 +17,7 @@ public class MSol {
     @Column(name = "nsum") private BigDecimal nsum;
     @Column(name = "org") private String org;
     @Column(name = "z_numb") private String zNumb;
-    @Column(name = "z_date") private LocalDate zDate;
+    @Column(name = "z_date") private LocalDateTime zDate;
     @Column(name = "n_resh") private String nResh;
     @Column(name = "d_resh") private LocalDate dResh;
     @Column(name = "mpay") private Long mpay;
@@ -24,7 +25,7 @@ public class MSol {
     @Column(name = "izid") private Long izid;
     @Column(name = "brid") private String brid;
     @Column(name = "sicid") private Long sicid;
-    @Column(name = "in_date") private LocalDate inDate;
+    @Column(name = "in_date") private LocalDateTime inDate;
     @Column(name = "hid") private Long hid;
     @Column(name = "z_id_") private Long zId;
     @Column(name = "numb") private String numb;

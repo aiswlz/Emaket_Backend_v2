@@ -1,4 +1,5 @@
 package com.example.demo.repository;
+import java.util.List;
 import java.util.Optional;
 
 import com.example.demo.entity.ZDoc;
@@ -8,4 +9,5 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ZDocRepository extends JpaRepository<ZDoc, Long> {
     Optional<ZDoc> findByNum(String num);
+    List<ZDoc> findAllByNumIn(List<String> nums);
 }

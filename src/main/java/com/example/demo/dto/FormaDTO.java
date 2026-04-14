@@ -3,6 +3,7 @@ package com.example.demo.dto;
 import lombok.Data;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Data
 public class FormaDTO {
@@ -33,7 +34,7 @@ public class FormaDTO {
     private String nomerDela;
     private Long maketId;
     private Long status;
-    private LocalDate lastStatusDate;
+    private LocalDateTime lastStatusDate;
     private String lastStatusUser;
     private String rejectReason;
     private String brid;

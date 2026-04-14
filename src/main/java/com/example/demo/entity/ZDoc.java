@@ -3,6 +3,7 @@ package com.example.demo.entity;
 import jakarta.persistence.*;
 import lombok.Data;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "z_doc", schema = "em5")
@@ -19,14 +20,14 @@ public class ZDoc {
     @Column(name = "id_sour_type") private String idSourType;
     @Column(name = "id_osn") private Long idOsn;
     @Column(name = "con_num") private String conNum;
-    @Column(name = "con_dat") private LocalDate conDat;
+    @Column(name = "con_dat") private LocalDateTime conDat;
     @Column(name = "id_ext_cntr") private Long idExtCntr;
     @Column(name = "id_ext_br") private String idExtBr;
     @Column(name = "id_tip") private String idTip;
     @Column(name = "idsol") private Long idsol;
     @Column(name = "is_otkaz") private Long isOtkaz;
     @Column(name = "id_emp") private Long idEmp;
-    @Column(name = "dat") private LocalDate dat;
+    @Column(name = "dat") private LocalDateTime dat;
     @Column(name = "id_eg_") private Long idEg;
     @Column(name = "id_iz") private Long idIz;
     @Column(name = "est_date") private LocalDate estDate;

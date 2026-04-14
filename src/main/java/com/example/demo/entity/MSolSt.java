@@ -2,7 +2,7 @@ package com.example.demo.entity;
 
 import jakarta.persistence.*;
 import lombok.Data;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "m_sol_st", schema = "em5")
@@ -12,7 +12,7 @@ public class MSolSt {
     @Column(name = "sid") private Long sid;
     @Column(name = "st1") private Long st1;
     @Column(name = "st2") private Long st2;
-    @Column(name = "dat") private LocalDate dat;
+    @Column(name = "dat") private LocalDateTime dat;
     @Column(name = "empid") private Long empid;
     @Column(name = "brid") private String brid;
     @Column(name = "usr") private String usr;

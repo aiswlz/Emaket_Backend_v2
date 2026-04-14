@@ -16,7 +16,7 @@ public class ElZayavkaService {
         return egRepo.findAll().stream().map(eg -> {
             ElZayavkaDTO dto = new ElZayavkaDTO();
             dto.setId(eg.getId());
-            dto.setData(eg.getDat());
+            dto.setData(eg.getDat() != null ? eg.getDat().toLocalDate() : null);
             dto.setNomerZayavleniya(eg.getZnum());
             dto.setOtdelenie(eg.getBrid());
             dto.setIin(eg.getIin());

@@ -7,7 +7,9 @@ import com.example.demo.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -39,12 +41,14 @@ public class FormaService {
     public List<FormaDTO> getAllByIin(Long iin) {
         List<MEg> egList = egRepo.findAllByIin(iin);
         List<FormaDTO> result = new ArrayList<>();
+
         for (MEg eg : egList) {
-            if (eg.getZnum() == null) continue;
-            zDocRepo.findByNum(eg.getZnum()).ifPresent(zd ->
+            // m_eg.ID = z_doc.ID — прямая связь через общий первичный ключ
+            zDocRepo.findById(eg.getId()).ifPresent(zd ->
                     result.add(buildDto(eg, zd))
             );
         }
+
         return result;
     }
 
@@ -64,26 +68,53 @@ public class FormaService {
     }
 
     public FormaDTO create(FormaDTO dto) {
-        long newId = (System.currentTimeMillis() % 1_000_000_000L) + 100_000_000L;
 
-        ZDoc zd = new ZDoc();
-        zd.setId(newId);
-        zd.setNum(dto.getNomerZayavleniya());
-        zd.setBrid(dto.getBrid() != null ? dto.getBrid().substring(0, Math.min(dto.getBrid().length(), 4)) : null);
-        zd.setDInp(dto.getDateObr());
-        zd.setDInpDoc(dto.getDatePrivem());
-        zd.setDReg(LocalDate.now());
-        zd.setIdSour(null);
-        zd.setIdTip("NEW");
-        zd.setDoclang("ru");
-        zd.setHomePhone(dto.getDomTel());
-        zd.setMobilePhone(dto.getMobTel());
-
-        zDocRepo.save(zd);
-
+        // m_eg и z_doc имеют ОДИНАКОВЫЙ ID — ищем клиента сначала
         MEg eg = dto.getIin() != null
                 ? egRepo.findFirstByIin(dto.getIin()).orElse(null)
                 : null;
+
+        if (eg == null) {
+            throw new RuntimeException("Клиент с ИИН " + dto.getIin() + " не найден в m_eg");
+        }
+
+        LocalDate today = LocalDate.now();
+        String nomerZayavl = dto.getNomerZayavleniya() != null
+                ? dto.getNomerZayavleniya()
+                : String.valueOf(eg.getId());
+        String brid  = eg.getBrid() != null ? eg.getBrid() : "0000";
+        Long   sicid = eg.getIdAcc() != null ? eg.getIdAcc() : eg.getId();
+
+        // z_doc.ID = m_eg.ID  (общий первичный ключ)
+        ZDoc zd = new ZDoc();
+        zd.setId(eg.getId());
+        zd.setNum(nomerZayavl);
+        zd.setConNum(nomerZayavl);
+        zd.setConDat(LocalDateTime.now());
+        zd.setDInp(dto.getDateObr() != null ? dto.getDateObr() : today);
+        zd.setDInpDoc(dto.getDatePrivem() != null ? dto.getDatePrivem() : today);
+        zd.setDReg(today);
+        zd.setDat(LocalDateTime.now());
+        zd.setIdTip("NEW");
+        zd.setDoclang("ru");
+        zd.setIsOtkaz(0L);
+        zd.setEstDate(today.plusMonths(2));
+        zd.setEstChange(1L);
+        zd.setBrid(brid);
+        zd.setSicid(sicid);
+        zd.setIdOsn(eg.getIdOsn() != null ? eg.getIdOsn() : 103L);
+        zd.setIdSour(eg.getIdSour() != null ? eg.getIdSour() : "WEB");
+        zd.setIdSourType(eg.getIdSourType() != null ? eg.getIdSourType() : "PRA");
+        zd.setMobilePhone(eg.getMobilePhone() != null ? eg.getMobilePhone() : dto.getMobTel());
+        zd.setMobileSource(eg.getMobileSource() != null ? eg.getMobileSource() : "WEB");
+        zd.setHomePhone(dto.getDomTel());
+        zd.setIdEmp(1L);
+        zd.setUsr("EMAKET");
+        zDocRepo.save(zd);
+
+        // Обновляем m_eg.znum = z_doc.num для связи через номер
+        eg.setZnum(nomerZayavl);
+        egRepo.save(eg);
 
         return buildDto(eg, zd);
     }
@@ -122,6 +153,7 @@ public class FormaService {
         dto.setIstochnik(zd.getIdSour());
         dto.setIdSourType(zd.getIdSourType());
         dto.setVidZayavleniya(zd.getIdTip());
+        dto.setOsnova(zd.getIdOsn());
         dto.setDateObr(zd.getDInp());
         dto.setDatePrivem(zd.getDInpDoc());
         dto.setYazykZayavl(zd.getDoclang());
@@ -135,7 +167,7 @@ public class FormaService {
         dto.setEstDate(zd.getEstDate());
         dto.setIsOtkaz(zd.getIsOtkaz());
         dto.setConNum(zd.getConNum());
-        dto.setConDat(zd.getConDat());
+        dto.setConDat(zd.getConDat() != null ? zd.getConDat().toLocalDate() : null);
         dto.setSolId(zd.getSicid() != null ? zd.getSicid().toString() : null);
 
         if (eg != null) {
@@ -147,7 +179,12 @@ public class FormaService {
             dto.setDateBirth(eg.getBd());
         }
 
-        solRepo.findByZNumb(zd.getNum()).ifPresent(sol -> {
+        // Ищем m_sol: сначала по номеру заявления, потом по общему ID
+        Optional<com.example.demo.entity.MSol> solOpt = solRepo.findByZNumb(zd.getNum());
+        if (!solOpt.isPresent()) {
+            solOpt = solRepo.findById(zd.getId());
+        }
+        solOpt.ifPresent(sol -> {
             dto.setNResh(sol.getNResh());
             dto.setDResh(sol.getDResh());
             dto.setNomerDela(sol.getNumb());
