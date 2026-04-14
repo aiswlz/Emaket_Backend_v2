@@ -30,31 +30,31 @@ public class MacetService {
         LocalDate today = LocalDate.now();
         boolean isRec = Boolean.TRUE.equals(dto.getIsPereschet());
 
+        // ВСЕ таблицы связаны одним общим ID:
+        // m_eg.ID = z_doc.ID = m_sol.ID = m_pay.SID
         Long sharedId = dto.getZdocId();
+        System.out.println("[DEBUG MacetService] zdocId=" + sharedId + " nomer=" + dto.getNomerZayavleniya() + " naznSumma=" + dto.getNaznSumma() + " isRec=" + isRec);
         if (sharedId == null) {
             throw new RuntimeException("zdocId обязателен");
         }
 
-        long payId = (System.currentTimeMillis() % 1_000_000_000L) + 300_000_000L;
+        String nomerZayavl = dto.getNomerZayavleniya();
 
-        // Шаг 1: m_sol
+        // Шаг 1: m_sol.ID = sharedId
         Optional<MSol> existingSol = solRepo.findById(sharedId);
         MSol sol;
         String oldSum = "-";
 
+        System.out.println("[DEBUG MacetService] solRepo.findById(" + sharedId + ") = " + (existingSol.isPresent() ? "FOUND nsum=" + existingSol.get().getNsum() : "NOT FOUND"));
         if (existingSol.isPresent()) {
             sol = existingSol.get();
             oldSum = sol.getNsum() != null ? sol.getNsum().toPlainString() : "-";
-            // Обновляем z_numb чтобы buildDto находил через findByZNumb
-            if (dto.getNomerZayavleniya() != null) {
-                sol.setZNumb(dto.getNomerZayavleniya());
-            }
         } else {
             sol = new MSol();
             sol.setId(sharedId);
             sol.setPid(sharedId);
             sol.setOrg("1");
-            sol.setZNumb(dto.getNomerZayavleniya());
+            sol.setZNumb(nomerZayavl);
             sol.setZDate(LocalDateTime.now());
             sol.setBrid(dto.getBrid() != null ? dto.getBrid() : "0000");
             sol.setSicid(dto.getSicid() != null ? dto.getSicid() : sharedId);
@@ -66,18 +66,18 @@ public class MacetService {
         sol.setNsum(dto.getNaznSumma());
         sol.setNResh("");
         sol.setDResh(dto.getDateNazn() != null ? dto.getDateNazn() : today);
-        sol.setMpay(payId);
+        sol.setMpay(sharedId);
         sol.setMid(sharedId);
         solRepo.save(sol);
 
-        // Шаг 2: m_pay
+        // Шаг 2: m_pay.SID = sharedId (тот же общий ID)
         Optional<MPay> existingPay = payRepo.findBySid(sharedId);
         MPay pay;
         if (existingPay.isPresent()) {
             pay = existingPay.get();
         } else {
             pay = new MPay();
-            pay.setId(payId);
+            pay.setId(sharedId);   // m_pay.ID = sharedId тоже
             pay.setSid(sharedId);
         }
         pay.setNsum(dto.getNaznSumma());
@@ -87,7 +87,7 @@ public class MacetService {
         pay.setStatus(1L);
         payRepo.save(pay);
 
-        // Шаг 3: z_doc
+        // Шаг 3: z_doc — обновляем тип
         zDocRepo.findById(sharedId).ifPresent(zd -> {
             zd.setIdsol(sharedId);
             zd.setIdTip(isRec ? "REC" : "NEW");
@@ -95,7 +95,7 @@ public class MacetService {
             zDocRepo.save(zd);
         });
 
-        // Шаг 4: z_history — записываем действие
+        // Шаг 4: z_history
         ZHistory hist = new ZHistory();
         hist.setZdocId(sharedId);
         hist.setIin(dto.getIin());

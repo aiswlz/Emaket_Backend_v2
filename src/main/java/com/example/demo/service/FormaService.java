@@ -31,11 +31,11 @@ public class FormaService {
     }
 
     public Optional<FormaDTO> getByIin(Long iin) {
-        return egRepo.findFirstByIin(iin).flatMap(eg -> {
-            if (eg.getZnum() == null) return Optional.empty();
-            return zDocRepo.findByNum(eg.getZnum())
-                    .map(zd -> buildDto(eg, zd));
-        });
+        return egRepo.findFirstByIin(iin).flatMap(eg ->
+                // m_eg.ID = z_doc.ID — общий первичный ключ
+                zDocRepo.findById(eg.getId())
+                        .map(zd -> buildDto(eg, zd))
+        );
     }
 
     public List<FormaDTO> getAllByIin(Long iin) {
@@ -181,8 +181,11 @@ public class FormaService {
 
         // Ищем m_sol: сначала по номеру заявления, потом по общему ID
         Optional<com.example.demo.entity.MSol> solOpt = solRepo.findByZNumb(zd.getNum());
+        System.out.println("[DEBUG buildDto] z_doc.id=" + zd.getId() + " z_doc.num=" + zd.getNum());
+        System.out.println("[DEBUG buildDto] findByZNumb result: " + solOpt.map(s -> "FOUND id=" + s.getId() + " nsum=" + s.getNsum()).orElse("NOT FOUND"));
         if (!solOpt.isPresent()) {
             solOpt = solRepo.findById(zd.getId());
+            System.out.println("[DEBUG buildDto] findById(" + zd.getId() + ") result: " + solOpt.map(s -> "FOUND nsum=" + s.getNsum()).orElse("NOT FOUND"));
         }
         solOpt.ifPresent(sol -> {
             dto.setNResh(sol.getNResh());
