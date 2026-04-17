@@ -9,7 +9,11 @@ import java.time.LocalDateTime;
 @Table(name = "z_doc", schema = "em5")
 @Data
 public class ZDoc {
-    @Id @Column(name = "id") private Long id;
+    @Id
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "z_doc_seq")
+    @SequenceGenerator(name = "z_doc_seq", sequenceName = "em5.z_doc_seq", allocationSize = 1)
+    @Column(name = "id") private Long id;
+    @Column(name = "id_eg_") private Long idEg;
     @Column(name = "num") private String num;
     @Column(name = "brid") private String brid;
     @Column(name = "sicid") private Long sicid;
@@ -28,7 +32,6 @@ public class ZDoc {
     @Column(name = "is_otkaz") private Long isOtkaz;
     @Column(name = "id_emp") private Long idEmp;
     @Column(name = "dat") private LocalDateTime dat;
-    @Column(name = "id_eg_") private Long idEg;
     @Column(name = "id_iz") private Long idIz;
     @Column(name = "est_date") private LocalDate estDate;
     @Column(name = "est_change") private Long estChange;

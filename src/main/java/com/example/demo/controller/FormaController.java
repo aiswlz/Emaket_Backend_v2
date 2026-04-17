@@ -19,6 +19,13 @@ public class FormaController {
     public ResponseEntity<FormaDTO> create(@RequestBody FormaDTO dto) {
         return ResponseEntity.ok(service.create(dto));
     }
+    @GetMapping("/{id}")
+    public ResponseEntity<FormaDTO> getById(@PathVariable Long id) {
+        return service.getById(id)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
     @GetMapping("/by-iin/{iin}")
     public ResponseEntity<FormaDTO> getByIin(@PathVariable Long iin) {
         return service.getByIin(iin)

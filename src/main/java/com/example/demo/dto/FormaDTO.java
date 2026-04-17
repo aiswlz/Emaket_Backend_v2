@@ -15,6 +15,7 @@ public class FormaDTO {
     private String istochnik;
     private String idSourType;
     private Long osnova;
+    private Long idOsn;
     private String vidZayavleniya;
     private Long iin;
     private LocalDate dateBirth;

@@ -34,22 +34,37 @@ public class EmdService {
                     dto.setIstochnik(eg.getIdSour());
                     dto.setVidviplat(eg.getIdOsn());
 
-                    solRepo.findById(eg.getId()).ifPresent(sol -> {
-                        dto.setStatus(sol.getSt());
-                        dto.setDateStatus(sol.getDResh());
-                        dto.setNaznRazmer(sol.getNsum());
-                        dto.setSpecialist(sol.getEmpId());
+                    // Ищем z_doc по id_eg_ (новая схема), затем по sicid, fallback по id
+                    Long egId = eg.getId();
+                    java.util.List<com.example.demo.entity.ZDoc> zdList = zDocRepo.findAllByIdEg(egId);
+                    if (zdList.isEmpty()) {
+                        Long sicid = eg.getIdAcc() != null ? eg.getIdAcc() : egId;
+                        zdList = zDocRepo.findAllBySicid(sicid);
+                    }
+                    if (zdList.isEmpty()) {
+                        zDocRepo.findById(egId).ifPresent(zdList::add);
+                    }
 
-                        payRepo.findBySid(sol.getId()).ifPresent(pay -> {
-                            dto.setDateNazn(pay.getDNaz());
-                            dto.setDateOkon(pay.getStopdate());
-                            dto.setViplata(pay.getNsum());
-                        });
-                    });
+                    if (!zdList.isEmpty()) {
+                        com.example.demo.entity.ZDoc z = zdList.get(0);
+                        dto.setSrokOkazaniya(z.getEstDate());
 
-                    zDocRepo.findById(eg.getId()).ifPresent(z ->
-                            dto.setSrokOkazaniya(z.getEstDate())
-                    );
+                        // Ищем m_sol по z_numb, fallback по id
+                        solRepo.findByZNumb(z.getNum())
+                                .or(() -> solRepo.findById(z.getId()))
+                                .ifPresent(sol -> {
+                                    dto.setStatus(sol.getSt());
+                                    dto.setDateStatus(sol.getDResh());
+                                    dto.setNaznRazmer(sol.getNsum());
+                                    dto.setSpecialist(sol.getEmpId());
+
+                                    payRepo.findBySid(sol.getId()).ifPresent(pay -> {
+                                        dto.setDateNazn(pay.getDNaz());
+                                        dto.setDateOkon(pay.getStopdate());
+                                        dto.setViplata(pay.getNsum());
+                                    });
+                                });
+                    }
 
                     return dto;
                 }).collect(Collectors.toList());

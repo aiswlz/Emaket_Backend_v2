@@ -25,28 +25,47 @@ public class FormaService {
 
     public Optional<FormaDTO> getById(Long id) {
         return zDocRepo.findById(id).map(zd -> {
-            MEg eg = egRepo.findById(id).orElse(null);
+            // Ищем клиента через id_eg_ (новая схема) или через общий ID (старая схема)
+            MEg eg = null;
+            if (zd.getIdEg() != null) {
+                eg = egRepo.findById(zd.getIdEg()).orElse(null);
+            }
+            if (eg == null) {
+                eg = egRepo.findById(id).orElse(null);
+            }
             return buildDto(eg, zd);
         });
     }
 
     public Optional<FormaDTO> getByIin(Long iin) {
-        return egRepo.findFirstByIin(iin).flatMap(eg ->
-                // m_eg.ID = z_doc.ID — общий первичный ключ
-                zDocRepo.findById(eg.getId())
-                        .map(zd -> buildDto(eg, zd))
-        );
+        return egRepo.findFirstByIin(iin).flatMap(eg -> {
+            // Сначала ищем по id_eg_ (новая схема)
+            Optional<ZDoc> zdOpt = zDocRepo.findFirstByIdEg(eg.getId());
+            // Если не нашли — ищем по общему ID (старая схема для совместимости)
+            if (zdOpt.isEmpty()) {
+                zdOpt = zDocRepo.findById(eg.getId());
+            }
+            return zdOpt.map(zd -> buildDto(eg, zd));
+        });
     }
 
     public List<FormaDTO> getAllByIin(Long iin) {
-        List<MEg> egList = egRepo.findAllByIin(iin);
+        Optional<MEg> egOpt = egRepo.findFirstByIin(iin);
+        if (egOpt.isEmpty()) return new ArrayList<>();
+
+        MEg eg = egOpt.get();
         List<FormaDTO> result = new ArrayList<>();
 
-        for (MEg eg : egList) {
-            // m_eg.ID = z_doc.ID — прямая связь через общий первичный ключ
-            zDocRepo.findById(eg.getId()).ifPresent(zd ->
-                    result.add(buildDto(eg, zd))
-            );
+        // Ищем все z_doc по id_eg_ (новая схема)
+        List<ZDoc> zdocList = zDocRepo.findAllByIdEg(eg.getId());
+
+        // Если нет по id_eg_ — ищем по общему ID (старая схема для совместимости)
+        if (zdocList.isEmpty()) {
+            zDocRepo.findById(eg.getId()).ifPresent(zdocList::add);
+        }
+
+        for (ZDoc zd : zdocList) {
+            result.add(buildDto(eg, zd));
         }
 
         return result;
@@ -85,9 +104,10 @@ public class FormaService {
         String brid  = eg.getBrid() != null ? eg.getBrid() : "0000";
         Long   sicid = eg.getIdAcc() != null ? eg.getIdAcc() : eg.getId();
 
-        // z_doc.ID = m_eg.ID  (общий первичный ключ)
+        // z_doc получает автоматический ID из sequence
+        // Ссылка на клиента хранится в id_eg_
         ZDoc zd = new ZDoc();
-        zd.setId(eg.getId());
+        zd.setIdEg(eg.getId());
         zd.setNum(nomerZayavl);
         zd.setConNum(nomerZayavl);
         zd.setConDat(LocalDateTime.now());
@@ -95,14 +115,18 @@ public class FormaService {
         zd.setDInpDoc(dto.getDatePrivem() != null ? dto.getDatePrivem() : today);
         zd.setDReg(today);
         zd.setDat(LocalDateTime.now());
-        zd.setIdTip("NEW");
+        zd.setIdTip(dto.getVidZayavleniya() != null ? dto.getVidZayavleniya() : "NEW");
         zd.setDoclang("ru");
         zd.setIsOtkaz(0L);
         zd.setEstDate(today.plusMonths(2));
         zd.setEstChange(1L);
         zd.setBrid(brid);
         zd.setSicid(sicid);
-        zd.setIdOsn(eg.getIdOsn() != null ? eg.getIdOsn() : 103L);
+        // idOsn: берём из DTO если передано, иначе из m_eg
+        Long idOsnToUse = (dto.getIdOsn() != null) ? dto.getIdOsn()
+                : (dto.getOsnova() != null) ? dto.getOsnova()
+                  : (eg.getIdOsn() != null ? eg.getIdOsn() : 103L);
+        zd.setIdOsn(idOsnToUse);
         zd.setIdSour(eg.getIdSour() != null ? eg.getIdSour() : "WEB");
         zd.setIdSourType(eg.getIdSourType() != null ? eg.getIdSourType() : "PRA");
         zd.setMobilePhone(eg.getMobilePhone() != null ? eg.getMobilePhone() : dto.getMobTel());
@@ -154,6 +178,7 @@ public class FormaService {
         dto.setIdSourType(zd.getIdSourType());
         dto.setVidZayavleniya(zd.getIdTip());
         dto.setOsnova(zd.getIdOsn());
+        dto.setIdOsn(zd.getIdOsn());
         dto.setDateObr(zd.getDInp());
         dto.setDatePrivem(zd.getDInpDoc());
         dto.setYazykZayavl(zd.getDoclang());
