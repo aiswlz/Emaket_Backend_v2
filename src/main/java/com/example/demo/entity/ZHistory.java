@@ -9,7 +9,12 @@ import java.time.LocalDateTime;
 @Data
 public class ZHistory {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "z_history_gen")
+    @SequenceGenerator(
+            name = "z_history_gen",
+            sequenceName = "em5.z_history_id_seq",  // ← z_history_id_seq
+            allocationSize = 1
+    )
     @Column(name = "id")
     private Long id;
 

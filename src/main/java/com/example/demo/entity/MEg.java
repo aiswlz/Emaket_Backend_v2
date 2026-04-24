@@ -9,7 +9,9 @@ import java.time.LocalDateTime;
 @Table(name = "m_eg", schema = "em5")
 @Data
 public class MEg {
-    @Id @Column(name = "id") private Long id;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id") private Long id;
     @Column(name = "id_msg") private Long idMsg;
     @Column(name = "id_st") private Long idSt;
     @Column(name = "dat") private LocalDateTime dat;

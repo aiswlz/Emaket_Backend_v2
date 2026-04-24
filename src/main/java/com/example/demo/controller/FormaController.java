@@ -16,9 +16,16 @@ public class FormaController {
     @Autowired private FormaService service;
 
     @PostMapping
-    public ResponseEntity<FormaDTO> create(@RequestBody FormaDTO dto) {
-        return ResponseEntity.ok(service.create(dto));
+    public ResponseEntity<?> create(@RequestBody FormaDTO dto) {
+        try {
+            return ResponseEntity.ok(service.create(dto));
+        } catch (Exception e) {
+            e.printStackTrace(); 
+            return ResponseEntity.status(500)
+                    .body("Ошибка: " + e.getMessage());
+        }
     }
+
     @GetMapping("/{id}")
     public ResponseEntity<FormaDTO> getById(@PathVariable Long id) {
         return service.getById(id)
@@ -47,5 +54,17 @@ public class FormaController {
         return service.getClientByIin(iin)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
+    }
+    @DeleteMapping("/{id}")
+    public ResponseEntity<String> delete(@PathVariable Long id) {
+        try {
+            service.deleteById(id);
+            return ResponseEntity.ok("Удалено");
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity
+                    .status(500)
+                    .body("Ошибка удаления: " + e.getMessage());
+        }
     }
 }

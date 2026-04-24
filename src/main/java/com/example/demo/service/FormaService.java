@@ -3,11 +3,12 @@ package com.example.demo.service;
 import com.example.demo.dto.FormaDTO;
 import com.example.demo.entity.MEg;
 import com.example.demo.entity.ZDoc;
+import com.example.demo.entity.ZHistory;
 import com.example.demo.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -22,10 +23,11 @@ public class FormaService {
     @Autowired private MSolRepository solRepo;
     @Autowired private MPayRepository payRepo;
     @Autowired private MSolStRepository solStRepo;
+    @Autowired private ZHistoryRepository historyRepo;
 
+    // ─── GET BY ID ────────────────────────────────────────────────
     public Optional<FormaDTO> getById(Long id) {
         return zDocRepo.findById(id).map(zd -> {
-            // Ищем клиента через id_eg_ (новая схема) или через общий ID (старая схема)
             MEg eg = null;
             if (zd.getIdEg() != null) {
                 eg = egRepo.findById(zd.getIdEg()).orElse(null);
@@ -37,11 +39,10 @@ public class FormaService {
         });
     }
 
+    // ─── GET BY IIN (один z_doc) ──────────────────────────────────
     public Optional<FormaDTO> getByIin(Long iin) {
         return egRepo.findFirstByIin(iin).flatMap(eg -> {
-            // Сначала ищем по id_eg_ (новая схема)
             Optional<ZDoc> zdOpt = zDocRepo.findFirstByIdEg(eg.getId());
-            // Если не нашли — ищем по общему ID (старая схема для совместимости)
             if (zdOpt.isEmpty()) {
                 zdOpt = zDocRepo.findById(eg.getId());
             }
@@ -49,6 +50,7 @@ public class FormaService {
         });
     }
 
+    // ─── GET ALL BY IIN (все z_doc клиента) ───────────────────────
     public List<FormaDTO> getAllByIin(Long iin) {
         Optional<MEg> egOpt = egRepo.findFirstByIin(iin);
         if (egOpt.isEmpty()) return new ArrayList<>();
@@ -56,10 +58,7 @@ public class FormaService {
         MEg eg = egOpt.get();
         List<FormaDTO> result = new ArrayList<>();
 
-        // Ищем все z_doc по id_eg_ (новая схема)
         List<ZDoc> zdocList = zDocRepo.findAllByIdEg(eg.getId());
-
-        // Если нет по id_eg_ — ищем по общему ID (старая схема для совместимости)
         if (zdocList.isEmpty()) {
             zDocRepo.findById(eg.getId()).ifPresent(zdocList::add);
         }
@@ -67,10 +66,10 @@ public class FormaService {
         for (ZDoc zd : zdocList) {
             result.add(buildDto(eg, zd));
         }
-
         return result;
     }
 
+    // ─── GET CLIENT BY IIN ────────────────────────────────────────
     public Optional<FormaDTO> getClientByIin(Long iin) {
         return egRepo.findFirstByIin(iin).map(eg -> {
             FormaDTO dto = new FormaDTO();
@@ -86,26 +85,32 @@ public class FormaService {
         });
     }
 
+    // ─── CREATE ───────────────────────────────────────────────────
     public FormaDTO create(FormaDTO dto) {
 
-        // m_eg и z_doc имеют ОДИНАКОВЫЙ ID — ищем клиента сначала
+        LocalDate today = LocalDate.now();
+
+        // Только поиск — никакого создания MEg
         MEg eg = dto.getIin() != null
                 ? egRepo.findFirstByIin(dto.getIin()).orElse(null)
                 : null;
 
         if (eg == null) {
-            throw new RuntimeException("Клиент с ИИН " + dto.getIin() + " не найден в m_eg");
+            throw new RuntimeException(
+                    "Клиент с ИИН " + dto.getIin() + " не найден в базе данных"
+            );
         }
 
-        LocalDate today = LocalDate.now();
         String nomerZayavl = dto.getNomerZayavleniya() != null
                 ? dto.getNomerZayavleniya()
-                : String.valueOf(eg.getId());
-        String brid  = eg.getBrid() != null ? eg.getBrid() : "0000";
-        Long   sicid = eg.getIdAcc() != null ? eg.getIdAcc() : eg.getId();
+                : String.valueOf(System.currentTimeMillis());
 
-        // z_doc получает автоматический ID из sequence
-        // Ссылка на клиента хранится в id_eg_
+        // Обрезаем brid до 3 символов (z_doc.brid = varchar(3))
+        String rawBrid = eg.getBrid() != null ? eg.getBrid().trim() : "000";
+        String brid = rawBrid.length() > 3 ? rawBrid.substring(0, 3) : rawBrid;
+
+        Long sicid = eg.getIdAcc() != null ? eg.getIdAcc() : eg.getId();
+
         ZDoc zd = new ZDoc();
         zd.setIdEg(eg.getId());
         zd.setNum(nomerZayavl);
@@ -115,42 +120,72 @@ public class FormaService {
         zd.setDInpDoc(dto.getDatePrivem() != null ? dto.getDatePrivem() : today);
         zd.setDReg(today);
         zd.setDat(LocalDateTime.now());
-        zd.setIdTip(dto.getVidZayavleniya() != null ? dto.getVidZayavleniya() : "NEW");
-        zd.setDoclang("ru");
+        zd.setIdTip("NEW");
+        zd.setDoclang(mapLang(dto.getYazykZayavl()));
         zd.setIsOtkaz(0L);
         zd.setEstDate(today.plusMonths(2));
         zd.setEstChange(1L);
         zd.setBrid(brid);
         zd.setSicid(sicid);
-        // idOsn: берём из DTO если передано, иначе из m_eg
-        Long idOsnToUse = (dto.getIdOsn() != null) ? dto.getIdOsn()
-                : (dto.getOsnova() != null) ? dto.getOsnova()
-                  : (eg.getIdOsn() != null ? eg.getIdOsn() : 103L);
+
+        Long idOsnToUse = dto.getIdOsn() != null ? dto.getIdOsn()
+                : dto.getOsnova() != null ? dto.getOsnova()
+                  : eg.getIdOsn() != null ? eg.getIdOsn() : 103L;
         zd.setIdOsn(idOsnToUse);
-        zd.setIdSour(eg.getIdSour() != null ? eg.getIdSour() : "WEB");
-        zd.setIdSourType(eg.getIdSourType() != null ? eg.getIdSourType() : "PRA");
-        zd.setMobilePhone(eg.getMobilePhone() != null ? eg.getMobilePhone() : dto.getMobTel());
-        zd.setMobileSource(eg.getMobileSource() != null ? eg.getMobileSource() : "WEB");
+
+        String idSour = eg.getIdSour() != null ? eg.getIdSour() : "WEB";
+        zd.setIdSour(idSour);
+
+        String idSourType = eg.getIdSourType() != null ? eg.getIdSourType() : "PRA";
+        zd.setIdSourType(idSourType);
+
+        zd.setMobilePhone(dto.getMobTel() != null ? dto.getMobTel() : eg.getMobilePhone());
+        zd.setMobileSource("WEB");
         zd.setHomePhone(dto.getDomTel());
         zd.setIdEmp(1L);
-        zd.setUsr("EMAKET");
+        zd.setUsr("EMA");
+
         zDocRepo.save(zd);
 
-        // Обновляем m_eg.znum = z_doc.num для связи через номер
         eg.setZnum(nomerZayavl);
         egRepo.save(eg);
 
         return buildDto(eg, zd);
     }
 
+    // ─── DELETE ───────────────────────────────────────────────────
+    @Transactional
+    public void deleteById(Long id) {
+        // 1. Удаляем историю по zdoc_id
+        List<ZHistory> history = historyRepo.findByZdocIdOrderByDatDesc(id);
+        if (!history.isEmpty()) {
+            historyRepo.deleteAll(history);
+        }
+
+        // 2. Удаляем m_sol_st, m_pay, m_sol если есть
+        solRepo.findById(id).ifPresent(sol -> {
+            solStRepo.findTopBySidOrderByDatDesc(sol.getId())
+                    .ifPresent(st -> solStRepo.delete(st));
+            payRepo.findBySid(sol.getId())
+                    .ifPresent(pay -> payRepo.delete(pay));
+            solRepo.delete(sol);
+        });
+
+        // 3. Удаляем z_doc
+        if (zDocRepo.existsById(id)) {
+            zDocRepo.deleteById(id);
+        }
+    }
+
+    // ─── UPDATE ───────────────────────────────────────────────────
     public Optional<FormaDTO> update(Long id, FormaDTO dto) {
         return zDocRepo.findById(id).map(zd -> {
 
-            if (dto.getDateObr() != null)    zd.setDInp(dto.getDateObr());
-            if (dto.getDatePrivem() != null) zd.setDInpDoc(dto.getDatePrivem());
-            if (dto.getYazykZayavl() != null) zd.setDoclang("ru");
-            if (dto.getDomTel() != null)     zd.setHomePhone(dto.getDomTel());
-            if (dto.getMobTel() != null)     zd.setMobilePhone(dto.getMobTel());
+            if (dto.getDateObr() != null)     zd.setDInp(dto.getDateObr());
+            if (dto.getDatePrivem() != null)  zd.setDInpDoc(dto.getDatePrivem());
+            if (dto.getYazykZayavl() != null) zd.setDoclang(mapLang(dto.getYazykZayavl()));
+            if (dto.getDomTel() != null)      zd.setHomePhone(dto.getDomTel());
+            if (dto.getMobTel() != null)      zd.setMobilePhone(dto.getMobTel());
 
             zDocRepo.save(zd);
 
@@ -164,9 +199,24 @@ public class FormaService {
                     eg = egEntity;
                 }
             }
-
             return buildDto(eg, zd);
         });
+    }
+
+    // ─── HELPERS ──────────────────────────────────────────────────
+
+    // Маппинг языка: "Русский" → "ru", "Казахский" → "kz"
+    private String mapLang(String lang) {
+        if (lang == null) return "ru";
+        switch (lang.trim().toLowerCase()) {
+            case "казахский":
+            case "қазақша":
+            case "kaz":
+            case "kz":
+                return "kz";
+            default:
+                return "ru";
+        }
     }
 
     private FormaDTO buildDto(MEg eg, ZDoc zd) {
@@ -204,13 +254,9 @@ public class FormaService {
             dto.setDateBirth(eg.getBd());
         }
 
-        // Ищем m_sol: сначала по номеру заявления, потом по общему ID
         Optional<com.example.demo.entity.MSol> solOpt = solRepo.findByZNumb(zd.getNum());
-        System.out.println("[DEBUG buildDto] z_doc.id=" + zd.getId() + " z_doc.num=" + zd.getNum());
-        System.out.println("[DEBUG buildDto] findByZNumb result: " + solOpt.map(s -> "FOUND id=" + s.getId() + " nsum=" + s.getNsum()).orElse("NOT FOUND"));
         if (!solOpt.isPresent()) {
             solOpt = solRepo.findById(zd.getId());
-            System.out.println("[DEBUG buildDto] findById(" + zd.getId() + ") result: " + solOpt.map(s -> "FOUND nsum=" + s.getNsum()).orElse("NOT FOUND"));
         }
         solOpt.ifPresent(sol -> {
             dto.setNResh(sol.getNResh());

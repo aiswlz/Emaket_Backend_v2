@@ -23,6 +23,23 @@ public class EmdService {
                     return b.getDat().compareTo(a.getDat());
                 })
                 .map(eg -> {
+                    Long egId = eg.getId();
+
+                    // Ищем z_doc по id_eg_ (новая схема), затем по sicid, fallback по id
+                    java.util.List<com.example.demo.entity.ZDoc> zdList =
+                            zDocRepo.findAllByIdEg(egId);
+
+                    if (zdList.isEmpty()) {
+                        Long sicid = eg.getIdAcc() != null ? eg.getIdAcc() : egId;
+                        zdList = zDocRepo.findAllBySicid(sicid);
+                    }
+                    if (zdList.isEmpty()) {
+                        zDocRepo.findById(egId).ifPresent(zdList::add);
+                    }
+
+                    // Если z_doc не найден — пропускаем запись (нет макета)
+                    if (zdList.isEmpty()) return null;
+
                     EmdDTO dto = new EmdDTO();
                     dto.setId(eg.getId());
                     dto.setDateObr(eg.getDat() != null ? eg.getDat().toLocalDate() : null);
@@ -34,39 +51,30 @@ public class EmdService {
                     dto.setIstochnik(eg.getIdSour());
                     dto.setVidviplat(eg.getIdOsn());
 
-                    // Ищем z_doc по id_eg_ (новая схема), затем по sicid, fallback по id
-                    Long egId = eg.getId();
-                    java.util.List<com.example.demo.entity.ZDoc> zdList = zDocRepo.findAllByIdEg(egId);
-                    if (zdList.isEmpty()) {
-                        Long sicid = eg.getIdAcc() != null ? eg.getIdAcc() : egId;
-                        zdList = zDocRepo.findAllBySicid(sicid);
-                    }
-                    if (zdList.isEmpty()) {
-                        zDocRepo.findById(egId).ifPresent(zdList::add);
-                    }
+                    com.example.demo.entity.ZDoc z = zdList.get(0);
+                    dto.setZdocId(z.getId());
+                    dto.setSrokOkazaniya(z.getEstDate());
 
-                    if (!zdList.isEmpty()) {
-                        com.example.demo.entity.ZDoc z = zdList.get(0);
-                        dto.setSrokOkazaniya(z.getEstDate());
+                    // Ищем m_sol по z_numb, fallback по id
+                    solRepo.findByZNumb(z.getNum())
+                            .or(() -> solRepo.findById(z.getId()))
+                            .ifPresent(sol -> {
+                                dto.setStatus(sol.getSt());
+                                dto.setDateStatus(sol.getDResh());
+                                dto.setNaznRazmer(sol.getNsum());
+                                dto.setSpecialist(sol.getEmpId());
 
-                        // Ищем m_sol по z_numb, fallback по id
-                        solRepo.findByZNumb(z.getNum())
-                                .or(() -> solRepo.findById(z.getId()))
-                                .ifPresent(sol -> {
-                                    dto.setStatus(sol.getSt());
-                                    dto.setDateStatus(sol.getDResh());
-                                    dto.setNaznRazmer(sol.getNsum());
-                                    dto.setSpecialist(sol.getEmpId());
-
-                                    payRepo.findBySid(sol.getId()).ifPresent(pay -> {
-                                        dto.setDateNazn(pay.getDNaz());
-                                        dto.setDateOkon(pay.getStopdate());
-                                        dto.setViplata(pay.getNsum());
-                                    });
+                                payRepo.findBySid(sol.getId()).ifPresent(pay -> {
+                                    dto.setDateNazn(pay.getDNaz());
+                                    dto.setDateOkon(pay.getStopdate());
+                                    dto.setViplata(pay.getNsum());
                                 });
-                    }
+                            });
 
                     return dto;
-                }).collect(Collectors.toList());
+                })
+                // Фильтруем null — записи без z_doc не показываем
+                .filter(dto -> dto != null)
+                .collect(Collectors.toList());
     }
 }

@@ -10,8 +10,12 @@ import java.time.LocalDateTime;
 @Data
 public class ZDoc {
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "z_doc_seq")
-    @SequenceGenerator(name = "z_doc_seq", sequenceName = "em5.z_doc_seq", allocationSize = 1)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "z_doc_gen")
+    @SequenceGenerator(
+            name = "z_doc_gen",
+            sequenceName = "em5.z_doc_id_seq",  // ← используем z_doc_id_seq
+            allocationSize = 1
+    )
     @Column(name = "id") private Long id;
     @Column(name = "id_eg_") private Long idEg;
     @Column(name = "num") private String num;

@@ -7,6 +7,7 @@ import java.time.LocalDate;
 @Data
 public class EmdDTO {
     private Long id;
+    private Long zdocId;
     private LocalDate dateObr;
     private LocalDate dateStatus;
     private Long status;
